@@ -1,15 +1,18 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '3.4.8-SNAPSHOT'
-	id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.springframework.boot' version "${bootVersion}"
+    id 'io.spring.dependency-management' version "${depMgtVersion}"
+    id 'io.freefair.lombok' version "${freefairLombokVersion}"
+    id 'jacoco'
+    id 'com.diffplug.spotless' version "${spotlessVersion}"
 }
 
-group = 'com.dongpv.sns'
-version = '0.0.1-SNAPSHOT'
+group = sysGroup
+version = sysVersion
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+		languageVersion = JavaLanguageVersion.of(javaVersion)
 	}
 }
 
@@ -17,6 +20,10 @@ configurations {
 	compileOnly {
 		extendsFrom annotationProcessor
 	}
+
+    configureEach {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 }
 
 repositories {
@@ -30,13 +37,89 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	compileOnly 'org.projectlombok:lombok'
-	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    runtimeOnly 'org.postgresql:postgresql'
+
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation "com.google.guava:guava:${googleGuavaVersion}"
+    implementation "org.apache.commons:commons-lang3:${apacheCommonsLang3Version}"
+    compileOnly "com.sun.xml.bind:jaxb-osgi:${jaxbOsgiVersion}"
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+
+    implementation "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+
+    implementation "org.json:json:${orgJsonVersion}"
+    implementation "org.springframework.cloud:spring-cloud-starter-openfeign:${openfeignVersion}"
+
+    testRuntimeOnly "org.apache.logging.log4j:log4j-core"
+    testRuntimeOnly "org.apache.logging.log4j:log4j-jul"
+    testRuntimeOnly "org.apache.logging.log4j:log4j-slf4j-impl"
+}
+
+tasks.register('installLocalGitHook', Copy) {
+    from file("$rootProject.rootDir/scripts/pre-commit")
+    into file("$rootProject.rootDir/.git/hooks")
+    filePermissions { permissions ->
+        permissions.user.read = true
+        permissions.user.write = true
+        permissions.group.read = true
+        permissions.other.read = true
+    }
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('installLocalGitHook')
+}
+
+tasks.named('build') {
+    dependsOn 'spotlessApply'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+    jvmArgs "-javaagent:${configurations.testRuntimeClasspath.find { it.name.contains('mockito-core') }}", '-Xshare:off'
+}
+
+jacoco {
+    toolVersion = jacocoVersion
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect(({
+            fileTree(dir: it, exclude: [
+                    'com/dongpv/sns/search/dto/**',
+                    'com/dongpv/sns/search/entity/**',
+                    'com/dongpv/sns/search/mapper/**',
+                    'com/dongpv/sns/search/configuration/**'
+            ])
+        } as Closure<Object>))))
+    }
+}
+
+spotless {
+    java {
+        removeUnusedImports()
+        toggleOffOn()
+        trimTrailingWhitespace()
+        endWithNewline()
+        leadingSpacesToTabs()
+        palantirJavaFormat()
+        importOrder("java", "jakarta", "org", "com", "com.diffplug")
+    }
 }
