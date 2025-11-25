@@ -1,0 +1,13 @@
+server:
+  port: ${SEARCH_SERVICE_PORT}
+  servlet:
+    context-path: /search
+
+spring:
+  application:
+    name: search-service
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
